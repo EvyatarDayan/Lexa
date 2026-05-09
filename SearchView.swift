@@ -229,6 +229,8 @@ private struct VocabularyResultCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .bottom) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("🇸🇪")
+                        .font(.body)
                     Text(entry.word)
                         .font(.title2.weight(.semibold))
                         .foregroundStyle(.blue)
@@ -260,12 +262,19 @@ private struct VocabularyResultCard: View {
                 .disabled(audioManager.isPlaying || !audioManager.isAudioReady)
                 Spacer(minLength: 0)
                 HStack(spacing: 6) {
-                    Text(entry.grammarType)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(Color(.tertiarySystemFill)))
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(entry.grammarType)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(Color(.tertiarySystemFill)))
+
+                        Text(entry.entryID.map { "\($0)" } ?? "\(entry.id)")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
 
                     if showsFavoriteButton {
                         Button {
@@ -288,9 +297,17 @@ private struct VocabularyResultCard: View {
                 }
             }
 
-            Text(entry.translation)
-                .font(.body)
-                .foregroundStyle(.secondary)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("🇬🇧")
+                        .font(.body)
+                    Text(entry.translation)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+            }
 
             Divider()
 
@@ -511,9 +528,19 @@ private struct FavoritesView: View {
     @FocusState private var searchFocused: Bool
 
     private var favoriteEntries: [VocabularyEntry] {
-        entries
-            .filter { favoritesManager.isFavorite($0.id) }
-            .sorted { $0.word.localizedCompare($1.word) == .orderedAscending }
+        let favorites = entries.filter { favoritesManager.isFavorite($0.id) }
+        switch favoritesManager.sortOption {
+        case .alphabetical:
+            return favorites.sorted { $0.word.localizedCompare($1.word) == .orderedAscending }
+        case .recent:
+            let byID = Dictionary(uniqueKeysWithValues: favorites.map { ($0.id, $0) })
+            let orderedRecent = favoritesManager.favoriteOrder.reversed().compactMap { byID[$0] }
+            let orderedRecentIDs = Set(orderedRecent.map(\.id))
+            let untracked = favorites
+                .filter { !orderedRecentIDs.contains($0.id) }
+                .sorted { $0.word.localizedCompare($1.word) == .orderedAscending }
+            return orderedRecent + untracked
+        }
     }
 
     private var filteredFavoriteEntries: [VocabularyEntry] {
@@ -536,30 +563,53 @@ private struct FavoritesView: View {
             } else {
                 VStack(spacing: 12) {
                     HStack(spacing: 10) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 10) {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundStyle(.secondary)
 
-                        TextField("Search favorites...", text: $searchText)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .focused($searchFocused)
+                            TextField("Search favorites...", text: $searchText)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .focused($searchFocused)
 
-                        if !searchText.isEmpty {
-                            Button {
-                                searchText = ""
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
+                            if !searchText.isEmpty {
+                                Button {
+                                    searchText = ""
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color(.secondarySystemGroupedBackground))
+                        )
+
+                        Menu {
+                            Button("A-B") {
+                                favoritesManager.sortOption = .alphabetical
+                            }
+                            Button("Recent") {
+                                favoritesManager.sortOption = .recent
+                            }
+                        } label: {
+                            Image("sort")
+                                .resizable()
+                                .renderingMode(.template)
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 23, height: 23)
+                                .foregroundStyle(.primary)
+                                .frame(width: 40, height: 40)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(Color(.secondarySystemGroupedBackground))
+                                )
                         }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color(.secondarySystemGroupedBackground))
-                    )
                     .padding(.horizontal, 20)
                     .padding(.top, 20)
                     .padding(.bottom, 20)
@@ -599,8 +649,10 @@ private struct FavoritesView: View {
         .toolbar {
             if !favoriteEntries.isEmpty {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Clear All") {
+                    Button {
                         showClearAllConfirmation = true
+                    } label: {
+                        Image(systemName: "trash")
                     }
                     .foregroundStyle(.red)
                 }
@@ -628,15 +680,23 @@ private struct FavoriteCollapsedRow: View {
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(entry.word)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("🇸🇪")
+                        .font(.body)
+                    Text(entry.word)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                }
 
-                Text(entry.translation)
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("🇬🇧")
+                        .font(.body)
+                    Text(entry.translation)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -653,7 +713,7 @@ private struct FavoriteCollapsedRow: View {
                             .resizable()
                             .renderingMode(.template)
                             .aspectRatio(contentMode: .fit)
-                            .frame(width: 18, height: 18)
+                            .frame(width: 22, height: 22)
                             .foregroundColor(audioManager.isAudioReady ? .blue : .gray)
                     }
                 }
@@ -668,7 +728,7 @@ private struct FavoriteCollapsedRow: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(
                     colorScheme == .dark
                         ? Color(red: 0.15, green: 0.15, blue: 0.17)

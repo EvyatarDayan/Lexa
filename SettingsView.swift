@@ -302,7 +302,7 @@ private struct HelpSupportView: View {
                 .navigationTitle("Help and support")
             }
         }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .background(Color(.systemGroupedBackground))
         .navigationBarTitleDisplayMode(.inline)
         .alert(isPresented: Binding(
             get: { alertType != .none },
@@ -510,6 +510,7 @@ private struct AboutLexaView: View {
             }
             .padding()
         }
+        .background(Color(.systemGroupedBackground))
         .navigationTitle("About")
         .navigationBarTitleDisplayMode(.inline)
     }
