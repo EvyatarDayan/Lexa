@@ -32,5 +32,21 @@ struct VocabularyEntry: Identifiable, Codable, Hashable {
     struct ExampleSentence: Codable, Hashable {
         let swedish: String
         let english: String
+
+        enum CodingKeys: String, CodingKey {
+            case swedish
+            case english
+        }
+
+        init(swedish: String, english: String) {
+            self.swedish = swedish
+            self.english = english
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            swedish = try c.decodeIfPresent(String.self, forKey: .swedish) ?? ""
+            english = try c.decodeIfPresent(String.self, forKey: .english) ?? ""
+        }
     }
 }
