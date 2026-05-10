@@ -20,6 +20,24 @@ struct VocabularyEntry: Identifiable, Codable, Hashable {
     let grammarBreakdown: [String]
     let data: [ExampleSentence]
 
+    /// Swedish headword for UI: only the first letter is capitalized (e.g. "Då och då").
+    var wordForDisplay: String {
+        Self.sentenceCaseFirstOnly(word, locale: Locale(identifier: "sv_SE"))
+    }
+
+    /// English gloss for UI: only the first letter is capitalized (e.g. "Now and then").
+    var translationForDisplay: String {
+        Self.sentenceCaseFirstOnly(translation, locale: Locale(identifier: "en_US"))
+    }
+
+    /// Lowercases the string with `locale`, then uppercases only the first character.
+    private static func sentenceCaseFirstOnly(_ string: String, locale: Locale) -> String {
+        guard !string.isEmpty else { return string }
+        let normalized = string.lowercased(with: locale)
+        let first = normalized.prefix(1).uppercased(with: locale)
+        return String(first) + normalized.dropFirst()
+    }
+
     enum CodingKeys: String, CodingKey {
         case entryID = "id"
         case word

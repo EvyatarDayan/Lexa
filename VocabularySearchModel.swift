@@ -65,16 +65,30 @@ final class VocabularySearchModel {
     }
 
     private func matchRank(for entry: VocabularyEntry, query: String) -> Int? {
-        if entry.word.compare(query, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame {
+        // Prefer exact spelling (including å/ä/ö) before diacritic-folded matches — e.g. query
+        // "känna" must rank above "kanna", which only ties when using diacriticInsensitive.
+        if entry.word.compare(query, options: [.caseInsensitive]) == .orderedSame {
             return 0
         }
 
-        if entry.word.range(of: query, options: [.caseInsensitive, .diacriticInsensitive, .anchored]) != nil {
+        if entry.word.compare(query, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame {
             return 1
         }
 
-        if entry.word.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil {
+        if entry.word.range(of: query, options: [.caseInsensitive, .anchored]) != nil {
             return 2
+        }
+
+        if entry.word.range(of: query, options: [.caseInsensitive, .diacriticInsensitive, .anchored]) != nil {
+            return 3
+        }
+
+        if entry.word.range(of: query, options: [.caseInsensitive]) != nil {
+            return 4
+        }
+
+        if entry.word.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil {
+            return 5
         }
 
         let matchesOtherFields =
@@ -86,6 +100,6 @@ final class VocabularySearchModel {
                     || $0.english.localizedCaseInsensitiveContains(query)
             })
 
-        return matchesOtherFields ? 3 : nil
+        return matchesOtherFields ? 6 : nil
     }
 }

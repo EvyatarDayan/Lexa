@@ -74,18 +74,7 @@ struct SearchView: View {
 
             Text("Lexa")
                 .font(.system(size: 45, weight: .regular, design: .rounded))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.26, green: 0.52, blue: 0.96),
-                            Color(red: 0.92, green: 0.25, blue: 0.21),
-                            Color(red: 0.98, green: 0.75, blue: 0.18),
-                            Color(red: 0.20, green: 0.66, blue: 0.33),
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
+                .foregroundStyle(LexaBrand.wordmarkGradient)
                 .padding(.top, -20)
 
             HStack(spacing: 12) {
@@ -179,18 +168,7 @@ struct SearchView: View {
 
                     Text("Welcome to Lexa")
                         .font(.title2.weight(.semibold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 0.26, green: 0.52, blue: 0.96),
-                                    Color(red: 0.92, green: 0.25, blue: 0.21),
-                                    Color(red: 0.98, green: 0.75, blue: 0.18),
-                                    Color(red: 0.20, green: 0.66, blue: 0.33),
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
+                        .foregroundStyle(LexaBrand.wordmarkGradient)
 
                     Text("Your offline dictionary with more than 8,400 Swedish words and examples.\n\nTry searching in Swedish or English to get started.")
                         .font(.body)
@@ -227,14 +205,18 @@ private struct VocabularyResultCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .bottom) {
+            HStack(alignment: .bottom, spacing: 8) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text("🇸🇪")
                         .font(.body)
-                    Text(entry.word)
+                    Text(entry.wordForDisplay)
                         .font(.title2.weight(.semibold))
                         .foregroundStyle(.blue)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
                 }
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+
                 Button(action: {
                     audioManager.playAudio()
                 }) {
@@ -260,21 +242,14 @@ private struct VocabularyResultCard: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(audioManager.isPlaying || !audioManager.isAudioReady)
-                Spacer(minLength: 0)
-                HStack(spacing: 6) {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(entry.grammarType)
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(Capsule().fill(Color(.tertiarySystemFill)))
 
-                        Text(entry.entryID.map { "\($0)" } ?? "\(entry.id)")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                            .lineLimit(1)
-                    }
+                HStack(spacing: 6) {
+                    Text(entry.grammarType)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(Color(.tertiarySystemFill)))
 
                     if showsFavoriteButton {
                         Button {
@@ -297,16 +272,15 @@ private struct VocabularyResultCard: View {
                 }
             }
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("🇬🇧")
-                        .font(.body)
-                    Text(entry.translation)
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                }
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("🇬🇧")
+                    .font(.body)
+                Text(entry.translationForDisplay)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             }
 
             Divider()
@@ -683,19 +657,23 @@ private struct FavoriteCollapsedRow: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("🇸🇪")
                         .font(.body)
-                    Text(entry.word)
+                    Text(entry.wordForDisplay)
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                 }
 
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("🇬🇧")
                         .font(.body)
-                    Text(entry.translation)
+                    Text(entry.translationForDisplay)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -759,7 +737,7 @@ private struct FavoriteWordDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemGroupedBackground))
-        .navigationTitle(entry.word)
+        .navigationTitle(entry.wordForDisplay)
         .navigationBarTitleDisplayMode(.inline)
     }
 }
