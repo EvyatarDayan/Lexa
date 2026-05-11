@@ -6,22 +6,66 @@
 import SwiftUI
 import Foundation
 
+/// Slightly darker than `.secondary` for supporting copy on `systemGroupedBackground` (better contrast).
+private enum SearchSupportingText {
+    static let body: Color = Color.primary.opacity(0.86)
+    static let caption: Color = Color.primary.opacity(0.72)
+    static let chrome: Color = Color.primary.opacity(0.62)
+}
+
 struct SearchView: View {
     @State private var model = VocabularySearchModel()
     @StateObject private var speechRecognizer = SpeechRecognizer()
     @State private var isRecording = false
     @FocusState private var searchFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
+    @State private var wordOfTheDayEntry: VocabularyEntry?
+    @State private var showFavoriteAddedPopup = false
+    @State private var popupDontShowAgain = false
+    @State private var navigateToFavorites = false
+    @AppStorage("hideFavoriteAddedPopup") private var hideFavoriteAddedPopup = false
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 googleStyleSearchHeader
-                Divider().opacity(0.35)
+                Divider().opacity(colorScheme == .dark ? 0.42 : 0.5)
                 resultsSection
             }
             .background(Color(.systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
+            .background(
+                NavigationLink(isActive: $navigateToFavorites) {
+                    FavoritesView(entries: model.entries)
+                } label: {
+                    EmptyView()
+                }
+                .hidden()
+            )
+            .onAppear { refreshWordOfTheDay() }
+            .onChange(of: model.entries.count) { _, _ in
+                refreshWordOfTheDay()
+            }
+            .overlay {
+                if showFavoriteAddedPopup {
+                    FavoriteAddedPopup(
+                        dontShowAgain: $popupDontShowAgain,
+                        onFavorites: {
+                            if popupDontShowAgain {
+                                hideFavoriteAddedPopup = true
+                            }
+                            showFavoriteAddedPopup = false
+                            navigateToFavorites = true
+                        },
+                        onOK: {
+                            if popupDontShowAgain {
+                                hideFavoriteAddedPopup = true
+                            }
+                            showFavoriteAddedPopup = false
+                        }
+                    )
+                }
+            }
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -49,7 +93,7 @@ struct SearchView: View {
                         .foregroundStyle(.primary)
                         .frame(width: 20, height: 20)
                         .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color(.systemBackground)))
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
 
@@ -65,7 +109,7 @@ struct SearchView: View {
                         .foregroundStyle(.primary)
                         .frame(width: 20, height: 20)
                         .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color(.systemBackground)))
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -79,7 +123,7 @@ struct SearchView: View {
 
             HStack(spacing: 12) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SearchSupportingText.chrome)
                     .font(.body.weight(.medium))
 
                 TextField("Search Swedish or English…", text: $model.query)
@@ -93,7 +137,7 @@ struct SearchView: View {
                         model.query = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(SearchSupportingText.chrome)
                     }
                     .buttonStyle(.plain)
                 }
@@ -111,7 +155,7 @@ struct SearchView: View {
                 } label: {
                     Image(systemName: isRecording ? "stop.circle.fill" : "mic.fill")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(isRecording ? .red : .secondary)
+                        .foregroundStyle(isRecording ? .red : SearchSupportingText.chrome)
                 }
                 .buttonStyle(.plain)
             }
@@ -148,6 +192,17 @@ struct SearchView: View {
         }
     }
 
+    private func refreshWordOfTheDay() {
+        wordOfTheDayEntry = WordOfTheDayStore.resolvedEntry(from: model.entries)
+    }
+
+    private var wordOfTheDayHeaderTitle: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd/MM/yyyy"
+        formatter.locale = Locale(identifier: "en_GB")
+        return "🔥 Word of the day - \(formatter.string(from: Date()))"
+    }
+
     @ViewBuilder
     private var resultsSection: some View {
         if let message = model.loadError {
@@ -161,23 +216,43 @@ struct SearchView: View {
             let results = model.filteredEntries
 
             if model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "book.closed.fill")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.secondary)
+                ScrollView {
+                    VStack(spacing: 24) {
+                        if let wod = wordOfTheDayEntry {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(wordOfTheDayHeaderTitle)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(SearchSupportingText.caption)
+                                    .multilineTextAlignment(.center)
+                                    .frame(maxWidth: .infinity, alignment: .center)
 
-                    Text("Welcome to Lexa")
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(LexaBrand.wordmarkGradient)
+                                WordOfTheDayCard(entry: wod) {
+                                    model.query = wod.word
+                                    searchFocused = false
+                                }
+                            }
+                            .padding(.top, 30)
+                            .padding(.bottom, 30)
+                        }
 
-                    Text("Your offline dictionary with more than 8,400 Swedish words and examples.\n\nTry searching in Swedish or English to get started.")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 24)
+                        VStack(spacing: 12) {
+                            Text("Welcome to Lexa")
+                                .font(.title2.weight(.semibold))
+                                .foregroundStyle(LexaBrand.wordmarkGradient)
+                            
+                            Text("Learn Swedish faster 🇸🇪 \nExplore thousands of Swedish words with translations, grammar explanations, pronunciation, and real-life examples, fully available offline.")
+                                .font(.body)
+                                .foregroundStyle(SearchSupportingText.body)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 4)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 32)
+                    .frame(maxWidth: .infinity)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .offset(y: -28)
             } else if results.isEmpty {
                 ContentUnavailableView.search(text: model.query)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -185,7 +260,11 @@ struct SearchView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 16) {
                         ForEach(results) { entry in
-                            VocabularyResultCard(entry: entry)
+                            VocabularyResultCard(entry: entry) {
+                                guard !hideFavoriteAddedPopup else { return }
+                                popupDontShowAgain = false
+                                showFavoriteAddedPopup = true
+                            }
                         }
                     }
                     .padding(.horizontal, 20)
@@ -196,9 +275,265 @@ struct SearchView: View {
     }
 }
 
+private struct FavoriteAddedPopup: View {
+    @Binding var dontShowAgain: Bool
+    var onFavorites: () -> Void
+    var onOK: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.32)
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                Text("Word added to favorites")
+                    .font(.headline)
+                    .multilineTextAlignment(.center)
+
+                Button {
+                    dontShowAgain.toggle()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: dontShowAgain ? "checkmark.square.fill" : "square")
+                            .foregroundStyle(dontShowAgain ? .blue : .secondary)
+                        Text("Don't show this again")
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                        Spacer(minLength: 0)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                HStack(spacing: 10) {
+                    Button("Favorites") {
+                        onFavorites()
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 38)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color(.tertiarySystemFill))
+                    )
+
+                    Button("OK") {
+                        onOK()
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 38)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color(.tertiarySystemFill))
+                    )
+                }
+            }
+            .padding(20)
+            .frame(maxWidth: 320)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(.systemBackground))
+                    .shadow(color: .black.opacity(0.18), radius: 20, x: 0, y: 8)
+            )
+            .padding(.horizontal, 24)
+        }
+        .transition(.opacity)
+    }
+}
+
+private struct WordOfTheDayCard: View {
+    let entry: VocabularyEntry
+    var onSelect: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+    @StateObject private var audioManager = WordAudioManager()
+    private var firstExampleSentence: VocabularyEntry.ExampleSentence? {
+        guard let first = entry.data.first else { return nil }
+        let swedish = first.swedish.trimmingCharacters(in: .whitespacesAndNewlines)
+        let english = first.english.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !swedish.isEmpty else { return nil }
+        return .init(swedish: swedish, english: english)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Headword row: flag + lemma (tappable) + pronunciation, same rhythm as result cards.
+            HStack(alignment: .center, spacing: 10) {
+                Text("🇸🇪")
+                    .font(.body)
+
+                Text(entry.wordForDisplay)
+                    .font(.title.weight(.semibold))
+                    .foregroundStyle(.blue)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.65)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button(action: {
+                    audioManager.playAudio()
+                }) {
+                    Group {
+                        if audioManager.isPlaying {
+                            Image(systemName: "pause.circle.fill")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(audioManager.isAudioReady ? .blue : .gray)
+                        } else {
+                            Image("audio-headphone")
+                                .resizable()
+                                .renderingMode(.template)
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 17, height: 17)
+                                .foregroundColor(audioManager.isAudioReady ? .blue : .gray)
+                        }
+                    }
+                    .frame(width: 28, height: 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color(.tertiarySystemFill))
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(audioManager.isPlaying || !audioManager.isAudioReady)
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("🇬🇧")
+                    .font(.body)
+                Text(entry.translationForDisplay)
+                    .font(.body)
+                    .foregroundStyle(SearchSupportingText.body)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.88)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.top, 8)
+
+            if firstExampleSentence != nil {
+                Divider()
+                    .opacity(colorScheme == .dark ? 0.35 : 0.55)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
+            }
+
+            if let firstExampleSentence {
+                ExampleSentenceRow(
+                    sentence: firstExampleSentence,
+                    swedishHighlightTerms: EntryExampleHighlighting.swedishHighlightTerms(for: entry),
+                    translationHighlightTerms: EntryExampleHighlighting.translationHighlightTerms(for: entry),
+                    highlightedText: EntryExampleHighlighting.highlightedText
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(
+                    colorScheme == .dark
+                        ? Color(red: 0.15, green: 0.15, blue: 0.17)
+                        : Color(.systemBackground)
+                )
+                .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 2)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .onTapGesture {
+            onSelect()
+        }
+        .onAppear {
+            audioManager.generateAudio(for: entry.word)
+        }
+        .onChange(of: entry.word) { _, newWord in
+            audioManager.generateAudio(for: newWord)
+        }
+        .onDisappear {
+            audioManager.cleanupAudio()
+        }
+    }
+}
+
+/// Shared example-sentence highlighting (Swedish lemma / verb stems + English gloss tokens).
+private enum EntryExampleHighlighting {
+    static func translationHighlightTerms(for entry: VocabularyEntry) -> [String] {
+        let tokenizedTerms = entry.translation
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.count >= 3 }
+
+        return [entry.translation] + tokenizedTerms
+    }
+
+    static func swedishHighlightTerms(for entry: VocabularyEntry) -> [String] {
+        var terms = Set<String>()
+        terms.insert(entry.word)
+
+        for item in entry.grammarBreakdown {
+            let leftSide = item.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: true).first.map(String.init) ?? item
+            for token in tokenizeWords(in: leftSide) where token.count >= 3 {
+                terms.insert(token)
+            }
+        }
+
+        if entry.grammarType.localizedCaseInsensitiveContains("verb") {
+            let lowered = entry.word.lowercased()
+            if lowered.count > 2, lowered.hasSuffix("a") {
+                let stem = String(lowered.dropLast())
+                terms.insert(stem)
+                terms.insert("\(stem)r")
+                terms.insert("\(stem)er")
+                terms.insert("\(stem)de")
+                terms.insert("\(stem)te")
+                terms.insert("\(stem)t")
+            }
+        }
+
+        return Array(terms)
+    }
+
+    static func tokenizeWords(in text: String) -> [String] {
+        text
+            .components(separatedBy: CharacterSet.letters.inverted)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    static func highlightedText(_ text: String, terms: [String]) -> Text {
+        let cleanTerms = terms
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        guard !cleanTerms.isEmpty else { return Text(text) }
+
+        var attributed = AttributedString(text)
+
+        for term in cleanTerms {
+            var searchStart = text.startIndex
+
+            while searchStart < text.endIndex,
+                  let range = text.range(
+                    of: term,
+                    options: [.caseInsensitive, .diacriticInsensitive],
+                    range: searchStart..<text.endIndex
+                  ) {
+                if let lowerBound = AttributedString.Index(range.lowerBound, within: attributed),
+                   let upperBound = AttributedString.Index(range.upperBound, within: attributed) {
+                    attributed[lowerBound..<upperBound].inlinePresentationIntent = .stronglyEmphasized
+                }
+                searchStart = range.upperBound
+            }
+        }
+
+        return Text(attributed)
+    }
+}
+
 private struct VocabularyResultCard: View {
     let entry: VocabularyEntry
     var showsFavoriteButton: Bool = true
+    var onFavoriteAdded: (() -> Void)? = nil
     @Environment(\.colorScheme) private var colorScheme
     @StateObject private var audioManager = WordAudioManager()
     @ObservedObject private var favoritesManager = FavoritesManager.shared
@@ -244,23 +579,30 @@ private struct VocabularyResultCard: View {
                 .disabled(audioManager.isPlaying || !audioManager.isAudioReady)
 
                 HStack(spacing: 6) {
-                    Text(entry.grammarType)
+                    Text(entry.grammarTypeForDisplay)
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.blue)
                         .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(Color(.tertiarySystemFill)))
+                        .frame(height: 25)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(Color(.tertiarySystemFill))
+                        )
 
                     if showsFavoriteButton {
                         Button {
+                            let wasFavorite = favoritesManager.isFavorite(entry.id)
                             favoritesManager.toggleFavorite(entry.id)
+                            if !wasFavorite {
+                                onFavoriteAdded?()
+                            }
                         } label: {
-                            Image("star")
+                            Image("favorite")
                                 .resizable()
                                 .renderingMode(.template)
                                 .aspectRatio(contentMode: .fit)
                                 .frame(width: 14, height: 14)
-                                .foregroundStyle(favoritesManager.isFavorite(entry.id) ? .green : .secondary)
+                                .foregroundStyle(favoritesManager.isFavorite(entry.id) ? .green : SearchSupportingText.chrome)
                                 .frame(width: 24, height: 24)
                                 .background(
                                     RoundedRectangle(cornerRadius: 7, style: .continuous)
@@ -277,7 +619,7 @@ private struct VocabularyResultCard: View {
                     .font(.body)
                 Text(entry.translationForDisplay)
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SearchSupportingText.body)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
                     .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
@@ -294,7 +636,7 @@ private struct VocabularyResultCard: View {
                         ForEach(entry.grammarBreakdown, id: \.self) { item in
                             Text("• \(item)")
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(SearchSupportingText.body)
                                 .lineLimit(1)
                                 .fixedSize(horizontal: true, vertical: false)
                         }
@@ -317,9 +659,9 @@ private struct VocabularyResultCard: View {
                 ForEach(Array(entry.data.enumerated()), id: \.offset) { _, sentence in
                     ExampleSentenceRow(
                         sentence: sentence,
-                        swedishHighlightTerms: swedishHighlightTerms,
-                        translationHighlightTerms: translationHighlightTerms,
-                        highlightedText: highlightedText
+                        swedishHighlightTerms: EntryExampleHighlighting.swedishHighlightTerms(for: entry),
+                        translationHighlightTerms: EntryExampleHighlighting.translationHighlightTerms(for: entry),
+                        highlightedText: EntryExampleHighlighting.highlightedText
                     )
                 }
             }
@@ -346,80 +688,6 @@ private struct VocabularyResultCard: View {
         }
     }
 
-    private var translationHighlightTerms: [String] {
-        let tokenizedTerms = entry.translation
-            .components(separatedBy: CharacterSet.alphanumerics.inverted)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { $0.count >= 3 }
-
-        return [entry.translation] + tokenizedTerms
-    }
-
-    private var swedishHighlightTerms: [String] {
-        var terms = Set<String>()
-        terms.insert(entry.word)
-
-        // Pull likely forms from grammar breakdown lines, e.g. "trycka: to press..."
-        for item in entry.grammarBreakdown {
-            let leftSide = item.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: true).first.map(String.init) ?? item
-            for token in tokenizeWords(in: leftSide) where token.count >= 3 {
-                terms.insert(token)
-            }
-        }
-
-        // Add common verb forms so imperative/past/supine forms are highlighted.
-        if entry.grammarType.localizedCaseInsensitiveContains("verb") {
-            let lowered = entry.word.lowercased()
-            if lowered.count > 2, lowered.hasSuffix("a") {
-                let stem = String(lowered.dropLast())
-                terms.insert(stem)         // tryck
-                terms.insert("\(stem)r")   // standard present for some verbs
-                terms.insert("\(stem)er")  // trycker
-                terms.insert("\(stem)de")  // regular past
-                terms.insert("\(stem)te")  // tryckte
-                terms.insert("\(stem)t")   // tryckt
-            }
-        }
-
-        return Array(terms)
-    }
-
-    private func tokenizeWords(in text: String) -> [String] {
-        text
-            .components(separatedBy: CharacterSet.letters.inverted)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-    }
-
-    private func highlightedText(_ text: String, terms: [String]) -> Text {
-        let cleanTerms = terms
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-
-        guard !cleanTerms.isEmpty else { return Text(text) }
-
-        var attributed = AttributedString(text)
-
-        for term in cleanTerms {
-            var searchStart = text.startIndex
-
-            while searchStart < text.endIndex,
-                  let range = text.range(
-                    of: term,
-                    options: [.caseInsensitive, .diacriticInsensitive],
-                    range: searchStart..<text.endIndex
-                  ) {
-                if let lowerBound = AttributedString.Index(range.lowerBound, within: attributed),
-                   let upperBound = AttributedString.Index(range.upperBound, within: attributed) {
-                    attributed[lowerBound..<upperBound].inlinePresentationIntent = .stronglyEmphasized
-                }
-                searchStart = range.upperBound
-            }
-        }
-
-        return Text(attributed)
-    }
-
     private var detailBackgroundColor: Color {
         colorScheme == .dark ? Color(.secondarySystemGroupedBackground) : Color(.systemGray6)
     }
@@ -443,7 +711,7 @@ private struct ExampleSentenceRow: View {
                         .fixedSize(horizontal: true, vertical: false)
                     highlightedText(sentence.english, translationHighlightTerms)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(SearchSupportingText.body)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
                 }
@@ -495,6 +763,7 @@ private struct ExampleSentenceRow: View {
 
 private struct FavoritesView: View {
     let entries: [VocabularyEntry]
+    @Environment(\.dismiss) private var dismiss
     @ObservedObject private var favoritesManager = FavoritesManager.shared
     @State private var showClearAllConfirmation = false
     @State private var searchText = ""
@@ -527,19 +796,23 @@ private struct FavoritesView: View {
     }
 
     var body: some View {
-        Group {
-            if favoriteEntries.isEmpty {
-                ContentUnavailableView(
-                    "No Favorites Yet",
-                    systemImage: "star",
-                    description: Text("Tap the star button on a word to add it to favorites.")
-                )
-            } else {
-                VStack(spacing: 12) {
+        VStack(spacing: 0) {
+            favoritesTopBar
+
+            Group {
+                if favoriteEntries.isEmpty {
+                    ContentUnavailableView(
+                        "No Favorites Yet",
+                        systemImage: "star",
+                        description: Text("Tap the star button on a word to add it to favorites.")
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    VStack(spacing: 12) {
                     HStack(spacing: 10) {
                         HStack(spacing: 10) {
                             Image(systemName: "magnifyingglass")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(SearchSupportingText.chrome)
 
                             TextField("Search favorites...", text: $searchText)
                                 .textInputAutocapitalization(.never)
@@ -551,7 +824,7 @@ private struct FavoritesView: View {
                                     searchText = ""
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(SearchSupportingText.chrome)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -615,23 +888,12 @@ private struct FavoritesView: View {
                         .listStyle(.plain)
                         .scrollContentBackground(.hidden)
                     }
-                }
-            }
-        }
-        .navigationTitle("Favorites")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if !favoriteEntries.isEmpty {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showClearAllConfirmation = true
-                    } label: {
-                        Image(systemName: "trash")
                     }
-                    .foregroundStyle(.red)
                 }
             }
         }
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
         .alert("Are you sure? this cannot be undone.", isPresented: $showClearAllConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Yes", role: .destructive) {
@@ -643,6 +905,50 @@ private struct FavoritesView: View {
         .navigationDestination(item: $selectedEntry) { entry in
             FavoriteWordDetailView(entry: entry)
         }
+    }
+
+    private var favoritesTopBar: some View {
+        HStack {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Text("Favorites")
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.primary)
+
+            Spacer()
+
+            Group {
+                if !favoriteEntries.isEmpty {
+                    Button {
+                        showClearAllConfirmation = true
+                    } label: {
+                        Image(systemName: "trash")
+                            .foregroundStyle(.red)
+                            .frame(width: 20, height: 20)
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Color.clear
+                        .frame(width: 36, height: 36)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
     }
 }
 
@@ -670,7 +976,7 @@ private struct FavoriteCollapsedRow: View {
                         .font(.body)
                     Text(entry.translationForDisplay)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(SearchSupportingText.body)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
                         .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
@@ -684,18 +990,18 @@ private struct FavoriteCollapsedRow: View {
                 Group {
                     if audioManager.isPlaying {
                         Image(systemName: "pause.circle.fill")
-                            .font(.system(size: 18, weight: .medium))
+                            .font(.system(size: 15, weight: .medium))
                             .foregroundColor(audioManager.isAudioReady ? .blue : .gray)
                     } else {
                         Image("audio-headphone")
                             .resizable()
                             .renderingMode(.template)
                             .aspectRatio(contentMode: .fit)
-                            .frame(width: 22, height: 22)
+                            .frame(width: 18, height: 18)
                             .foregroundColor(audioManager.isAudioReady ? .blue : .gray)
                     }
                 }
-                .frame(width: 44, height: 44)
+                .frame(width: 36, height: 36)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(Color(.tertiarySystemFill))
@@ -728,17 +1034,49 @@ private struct FavoriteCollapsedRow: View {
 
 private struct FavoriteWordDetailView: View {
     let entry: VocabularyEntry
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ScrollView {
-            VocabularyResultCard(entry: entry, showsFavoriteButton: false)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
+        VStack(spacing: 0) {
+            HStack {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Text(entry.wordForDisplay)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Spacer()
+
+                Color.clear
+                    .frame(width: 36, height: 36)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 8)
+
+            ScrollView {
+                VocabularyResultCard(entry: entry, showsFavoriteButton: false)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemGroupedBackground))
-        .navigationTitle(entry.wordForDisplay)
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
     }
 }
 

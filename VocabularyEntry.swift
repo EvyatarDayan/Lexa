@@ -30,6 +30,21 @@ struct VocabularyEntry: Identifiable, Codable, Hashable {
         Self.sentenceCaseFirstOnly(translation, locale: Locale(identifier: "en_US"))
     }
 
+    /// Grammar tag for UI. Keep concise labels for known variants.
+    var grammarTypeForDisplay: String {
+        let trimmed = grammarType.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.compare("Adverb (fras)", options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame {
+            return "Adverb"
+        }
+        if trimmed.compare("Preposition (fras)", options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame {
+            return "Preposition"
+        }
+        if trimmed.compare("Prepositional phrase", options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame {
+            return "Prepositional"
+        }
+        return trimmed
+    }
+
     /// Lowercases the string with `locale`, then uppercases only the first character.
     private static func sentenceCaseFirstOnly(_ string: String, locale: Locale) -> String {
         guard !string.isEmpty else { return string }

@@ -7,75 +7,109 @@ import SwiftUI
 
 struct SettingsView: View {
     @AppStorage("isDarkMode") private var isDarkMode = false
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("MODE")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 20)
+        VStack(spacing: 0) {
+            settingsTopBar
 
-                    HStack {
-                        settingsRow(
-                            icon: "moon.fill",
-                            iconColor: .purple,
-                            title: "Dark Mode",
-                            subtitle: "Enable dark mode"
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("MODE")
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 20)
+
+                        HStack {
+                            settingsRow(
+                                icon: "moon.fill",
+                                iconColor: .purple,
+                                title: "Dark Mode",
+                                subtitle: "Enable dark mode"
+                            )
+                            Spacer()
+                            Toggle("", isOn: $isDarkMode)
+                                .labelsHidden()
+                                .scaleEffect(0.8)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(settingsCardBackground)
                         )
-                        Spacer()
-                        Toggle("", isOn: $isDarkMode)
-                            .labelsHidden()
-                            .scaleEffect(0.8)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(settingsCardBackground)
-                    )
-                    .padding(.horizontal, 20)
-                }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("SUPPORT")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(.secondary)
                         .padding(.horizontal, 20)
+                    }
 
-                    settingsNavigationRow(
-                        destination: HelpSupportView(),
-                        icon: "questionmark",
-                        iconColor: .blue,
-                        title: "Help & Support",
-                        subtitle: "Get help and contact support"
-                    )
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("SUPPORT")
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 20)
 
-                    settingsNavigationRow(
-                        destination: TermsPrivacyView(),
-                        icon: "doc.text",
-                        iconColor: .blue,
-                        title: "Terms & Privacy",
-                        subtitle: "View terms and privacy policy"
-                    )
+                        settingsNavigationRow(
+                            destination: HelpSupportView(),
+                            icon: "questionmark",
+                            iconColor: .blue,
+                            title: "Help & Support",
+                            subtitle: "Get help and contact support"
+                        )
 
-                    settingsNavigationRow(
-                        destination: AboutLexaView(),
-                        icon: "info",
-                        iconColor: .blue,
-                        title: "About",
-                        subtitle: "App version and information"
-                    )
+                        settingsNavigationRow(
+                            destination: TermsPrivacyView(),
+                            icon: "doc.text",
+                            iconColor: .blue,
+                            title: "Terms & Privacy",
+                            subtitle: "View terms and privacy policy"
+                        )
+
+                        settingsNavigationRow(
+                            destination: AboutLexaView(),
+                            icon: "info",
+                            iconColor: .blue,
+                            title: "About",
+                            subtitle: "App version and information"
+                        )
+                    }
                 }
+                .padding(.vertical, 16)
             }
-            .padding(.vertical, 16)
         }
-        .navigationTitle("Settings")
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
         .background(Color(.systemGroupedBackground))
+    }
+
+    private var settingsTopBar: some View {
+        HStack {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Text("Settings")
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.primary)
+
+            Spacer()
+
+            Color.clear
+                .frame(width: 36, height: 36)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
     }
 
     private func settingsRow(icon: String, iconColor: Color, title: String, subtitle: String) -> some View {
@@ -138,6 +172,41 @@ struct SettingsView: View {
     }
 }
 
+private struct PlainBackHeader: View {
+    let title: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        HStack {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Text(title)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+
+            Spacer()
+
+            Color.clear
+                .frame(width: 36, height: 36)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+    }
+}
+
 private struct HelpSupportView: View {
     @State private var fullName = ""
     @State private var email = ""
@@ -160,150 +229,153 @@ private struct HelpSupportView: View {
     }
 
     var body: some View {
-        Group {
-            if showForm {
-                Form {
-                    Section(header: Text("Your full name")) {
-                        TextField("Full name", text: $fullName)
-                    }
+        VStack(spacing: 0) {
+            PlainBackHeader(title: showForm ? "Contact us" : "Help and support")
 
-                    Section(header: Text("Your Email")) {
-                        TextField("Email", text: $email)
-                            .keyboardType(.emailAddress)
-                            .textInputAutocapitalization(.never)
-                    }
-
-                    Section(header: Text("Subject")) {
-                        TextField("", text: $subject)
-                            .onChange(of: subject) { _, newValue in
-                                if newValue.count > 100 {
-                                    subject = String(newValue.prefix(100))
-                                }
-                            }
-                        HStack {
-                            Spacer()
-                            Text("\(subject.count)/100")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+            Group {
+                if showForm {
+                    Form {
+                        Section(header: Text("Your full name")) {
+                            TextField("Full name", text: $fullName)
                         }
-                    }
 
-                    Section(header: Text("Description")) {
-                        TextEditor(text: $description)
-                            .frame(height: 120)
-                            .onChange(of: description) { _, newValue in
-                                if newValue.count > 400 {
-                                    description = String(newValue.prefix(400))
-                                }
-                            }
-                        HStack {
-                            Spacer()
-                            Text("\(description.count)/400")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                        Section(header: Text("Your Email")) {
+                            TextField("Email", text: $email)
+                                .keyboardType(.emailAddress)
+                                .textInputAutocapitalization(.never)
                         }
-                    }
 
-                    if showError && !allFieldsFilled {
+                        Section(header: Text("Subject")) {
+                            TextField("", text: $subject)
+                                .onChange(of: subject) { _, newValue in
+                                    if newValue.count > 100 {
+                                        subject = String(newValue.prefix(100))
+                                    }
+                                }
+                            HStack {
+                                Spacer()
+                                Text("\(subject.count)/100")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        Section(header: Text("Description")) {
+                            TextEditor(text: $description)
+                                .frame(height: 120)
+                                .onChange(of: description) { _, newValue in
+                                    if newValue.count > 400 {
+                                        description = String(newValue.prefix(400))
+                                    }
+                                }
+                            HStack {
+                                Spacer()
+                                Text("\(description.count)/400")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        if showError && !allFieldsFilled {
+                            Section {
+                                Text("All fields are required.")
+                                    .foregroundColor(.red)
+                                    .font(.subheadline)
+                            }
+                        }
+
                         Section {
-                            Text("All fields are required.")
-                                .foregroundColor(.red)
-                                .font(.subheadline)
-                        }
-                    }
-
-                    Section {
-                        Button(action: {
-                            if allFieldsFilled {
-                                alertType = .messageSent
-                                showError = false
-                            } else {
-                                showError = true
+                            Button(action: {
+                                if allFieldsFilled {
+                                    alertType = .messageSent
+                                    showError = false
+                                } else {
+                                    showError = true
+                                }
+                            }) {
+                                Text("Send")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 50)
+                                    .background(allFieldsFilled ? Color.green : Color.gray)
+                                    .cornerRadius(12)
                             }
-                        }) {
-                            Text("Send")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 50)
-                                .background(allFieldsFilled ? Color.green : Color.gray)
-                                .cornerRadius(12)
+                            .disabled(!allFieldsFilled)
                         }
-                        .disabled(!allFieldsFilled)
+                        .listRowBackground(Color.clear)
                     }
-                    .listRowBackground(Color.clear)
-                }
-                .navigationTitle("Contact us")
-            } else {
-                VStack {
-                    Spacer(minLength: 0)
-                    VStack(alignment: .center, spacing: 32) {
-                        VStack(alignment: .center, spacing: 16) {
-                            Text("We'd love to hear from you!")
-                                .font(.title3)
-                                .fontWeight(.bold)
+                } else {
+                    VStack {
+                        Spacer(minLength: 0)
+                        VStack(alignment: .center, spacing: 32) {
+                            VStack(alignment: .center, spacing: 16) {
+                                Text("We'd love to hear from you!")
+                                    .font(.title3)
+                                    .fontWeight(.bold)
 
-                            Text("Whether you have questions,")
-                                .font(.body)
+                                Text("Whether you have questions,")
+                                    .font(.body)
 
-                            Text("feedback, or just want to say hi,")
-                                .font(.body)
+                                Text("feedback, or just want to say hi,")
+                                    .font(.body)
 
-                            Text("feel free to reach out.")
-                                .font(.body)
+                                Text("feel free to reach out.")
+                                    .font(.body)
 
-                            Divider()
-                                .padding(.vertical, 8)
-                                .padding(.top, 32)
-                                .padding(.bottom, 32)
+                                Divider()
+                                    .padding(.vertical, 8)
+                                    .padding(.top, 32)
+                                    .padding(.bottom, 32)
 
-                            Text("Email: abashelariprod@gmail.com")
-                                .font(.subheadline)
+                                Text("Email: abashelariprod@gmail.com")
+                                    .font(.subheadline)
 
-                            Text("Website: https://abashelari.com")
-                                .font(.subheadline)
+                                Text("Website: https://abashelari.com")
+                                    .font(.subheadline)
 
-                            Divider()
-                                .padding(.vertical, 8)
-                                .padding(.top, 32)
-                        }
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal, 32)
-
-                        Text("OR")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .foregroundColor(.secondary)
-                            .padding(.vertical, 8)
-
-                        Button(action: {
-                            showForm = true
-                        }) {
-                            Text("Contact form")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 50)
-                                .background(Color.green)
-                                .cornerRadius(12)
-                                .padding(.horizontal, 32)
-                        }
-
-                        Text("We aim to respond within 24 hours.")
-                            .font(.body)
-                            .fontWeight(.bold)
+                                Divider()
+                                    .padding(.vertical, 8)
+                                    .padding(.top, 32)
+                            }
                             .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 32)
+
+                            Text("OR")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                                .padding(.vertical, 8)
+
+                            Button(action: {
+                                showForm = true
+                            }) {
+                                Text("Contact form")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 50)
+                                    .background(Color.green)
+                                    .cornerRadius(12)
+                                    .padding(.horizontal, 32)
+                            }
+
+                            Text("We aim to respond within 24 hours.")
+                                .font(.body)
+                                .fontWeight(.bold)
+                                .multilineTextAlignment(.center)
+                        }
+                        Spacer()
                     }
-                    Spacer()
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .padding(.vertical, 32)
                 }
-                .frame(maxHeight: .infinity, alignment: .top)
-                .padding(.vertical, 32)
-                .navigationTitle("Help and support")
             }
         }
         .background(Color(.systemGroupedBackground))
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
         .alert(isPresented: Binding(
             get: { alertType != .none },
             set: { if !$0 { alertType = .none } }
@@ -327,6 +399,8 @@ private struct TermsPrivacyView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            PlainBackHeader(title: "Terms & Privacy")
+
             Picker("Section", selection: $selectedTab) {
                 Text("Terms").tag(0)
                 Text("Privacy").tag(1)
@@ -348,8 +422,8 @@ private struct TermsPrivacyView: View {
             }
         }
         .background(Color(.systemGroupedBackground))
-        .navigationTitle("Terms & Privacy")
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
     }
 
     private var contentText: String {
@@ -475,44 +549,48 @@ private struct TermsPrivacyView: View {
 
 private struct AboutLexaView: View {
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("About Lexa")
-                        .font(.title2)
-                        .fontWeight(.bold)
+        VStack(spacing: 0) {
+            PlainBackHeader(title: "About")
 
-                    Text("Lexa is a comprehensive Swedish-English dictionary app designed to help you search, understand, and pronounce vocabulary with ease. Explore words, grammar breakdowns, and practical examples while keeping your learning flow simple and fast.")
-                        .font(.body)
-                        .multilineTextAlignment(.leading)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("About Lexa")
+                            .font(.title2)
+                            .fontWeight(.bold)
+
+                        Text("Lexa is a comprehensive Swedish-English dictionary app designed to help you search, understand, and pronounce vocabulary with ease. Explore words, grammar breakdowns, and practical examples while keeping your learning flow simple and fast.")
+                            .font(.body)
+                            .multilineTextAlignment(.leading)
+                    }
+
+                    Divider()
+                        .padding(.vertical, 8)
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("About ABASHELARI")
+                            .font(.title2)
+                            .fontWeight(.bold)
+
+                        Text("At ABASHELARI, we believe in creating software that makes everyday life simpler, smarter, and more enjoyable. Our mission is to develop innovative digital solutions that blend creativity with technology, offering users tools that are intuitive, reliable, and engaging.")
+                            .font(.body)
+                            .multilineTextAlignment(.leading)
+
+                        Text("Whether it's educational apps, lifestyle tools, or entertainment experiences, ABASHELARI is dedicated to delivering high-quality products that inspire learning, spark curiosity, and bring value to people around the world.")
+                            .font(.body)
+                            .multilineTextAlignment(.leading)
+
+                        Text("Driven by passion and guided by innovation, ABASHELARI is committed to continuous improvement and to building software that connects people with what matters most.")
+                            .font(.body)
+                            .multilineTextAlignment(.leading)
+                    }
                 }
-
-                Divider()
-                    .padding(.vertical, 8)
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("About ABASHELARI")
-                        .font(.title2)
-                        .fontWeight(.bold)
-
-                    Text("At ABASHELARI, we believe in creating software that makes everyday life simpler, smarter, and more enjoyable. Our mission is to develop innovative digital solutions that blend creativity with technology, offering users tools that are intuitive, reliable, and engaging.")
-                        .font(.body)
-                        .multilineTextAlignment(.leading)
-
-                    Text("Whether it's educational apps, lifestyle tools, or entertainment experiences, ABASHELARI is dedicated to delivering high-quality products that inspire learning, spark curiosity, and bring value to people around the world.")
-                        .font(.body)
-                        .multilineTextAlignment(.leading)
-
-                    Text("Driven by passion and guided by innovation, ABASHELARI is committed to continuous improvement and to building software that connects people with what matters most.")
-                        .font(.body)
-                        .multilineTextAlignment(.leading)
-                }
+                .padding()
             }
-            .padding()
         }
         .background(Color(.systemGroupedBackground))
-        .navigationTitle("About")
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
     }
 }
 
