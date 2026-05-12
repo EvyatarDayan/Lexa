@@ -5,12 +5,23 @@
 
 import SwiftUI
 import Foundation
+import Combine
 
 /// Slightly darker than `.secondary` for supporting copy on `systemGroupedBackground` (better contrast).
 private enum SearchSupportingText {
     static let body: Color = Color.primary.opacity(0.86)
     static let caption: Color = Color.primary.opacity(0.72)
     static let chrome: Color = Color.primary.opacity(0.62)
+}
+
+/// 2pt system separator — shared by search result cards and Word of the Day.
+private struct LexaThickSeparator: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color(.separator))
+            .frame(maxWidth: .infinity)
+            .frame(height: 2)
+    }
 }
 
 struct SearchView: View {
@@ -24,12 +35,14 @@ struct SearchView: View {
     @State private var popupDontShowAgain = false
     @State private var navigateToFavorites = false
     @AppStorage("hideFavoriteAddedPopup") private var hideFavoriteAddedPopup = false
+    @State private var lexWordmarkXSpinDegrees: Double = 0
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 googleStyleSearchHeader
-                Divider().opacity(colorScheme == .dark ? 0.42 : 0.5)
+                LexaThickSeparator()
+                    .padding(.top, 30)
                 resultsSection
             }
             .background(Color(.systemGroupedBackground))
@@ -116,9 +129,12 @@ struct SearchView: View {
             .padding(.horizontal, 20)
             .padding(.top, 8)
 
-            Text("Lexa")
-                .font(.system(size: 45, weight: .regular, design: .rounded))
-                .foregroundStyle(LexaBrand.wordmarkGradient)
+            lexWordmarkLetters(xSpinDegrees: lexWordmarkXSpinDegrees)
+                .foregroundStyle(Color.clear)
+                .overlay {
+                    LexaBrand.wordmarkGradient
+                        .mask(lexWordmarkLetters(xSpinDegrees: lexWordmarkXSpinDegrees))
+                }
                 .padding(.top, -20)
 
             HStack(spacing: 12) {
@@ -168,7 +184,8 @@ struct SearchView: View {
                             ? Color(red: 0.15, green: 0.15, blue: 0.17)
                             : Color(.systemBackground)
                     )
-                    .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
+                    .shadow(color: .black.opacity(0.07), radius: 18, x: 0, y: 6)
+                    .shadow(color: .black.opacity(0.14), radius: 8, x: 0, y: 3)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
@@ -179,6 +196,9 @@ struct SearchView: View {
         }
         .frame(maxWidth: .infinity)
         .background(Color(.systemGroupedBackground))
+        .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { _ in
+            spinLexaWordmarkX()
+        }
         .onAppear {
             speechRecognizer.setOnRecordingStopped {
                 isRecording = false
@@ -190,6 +210,23 @@ struct SearchView: View {
                 isRecording = false
             }
         }
+    }
+
+    private func spinLexaWordmarkX() {
+        withAnimation(.easeInOut(duration: 0.75)) {
+            lexWordmarkXSpinDegrees += 360
+        }
+    }
+
+    @ViewBuilder
+    private func lexWordmarkLetters(xSpinDegrees: Double) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text("Le")
+            Text("x")
+                .rotationEffect(.degrees(xSpinDegrees), anchor: UnitPoint(x: 0.52, y: 0.58))
+            Text("a")
+        }
+        .font(.system(size: 45, weight: .regular, design: .rounded))
     }
 
     private func refreshWordOfTheDay() {
@@ -216,7 +253,7 @@ struct SearchView: View {
             let results = model.filteredEntries
 
             if model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                ScrollView {
+                VStack(spacing: 0) {
                     VStack(spacing: 24) {
                         if let wod = wordOfTheDayEntry {
                             VStack(alignment: .leading, spacing: 8) {
@@ -225,6 +262,7 @@ struct SearchView: View {
                                     .foregroundStyle(SearchSupportingText.caption)
                                     .multilineTextAlignment(.center)
                                     .frame(maxWidth: .infinity, alignment: .center)
+                                    .padding(.bottom, 10)
 
                                 WordOfTheDayCard(entry: wod) {
                                     model.query = wod.word
@@ -237,10 +275,11 @@ struct SearchView: View {
 
                         VStack(spacing: 12) {
                             Text("Welcome to Lexa")
-                                .font(.title2.weight(.semibold))
+                                .font(.title.weight(.semibold))
                                 .foregroundStyle(LexaBrand.wordmarkGradient)
-                            
-                            Text("Learn Swedish faster 🇸🇪 \nExplore thousands of Swedish words with translations, grammar explanations, pronunciation, and real-life examples, fully available offline.")
+                                .padding(.bottom, 10)
+
+                            Text("Explore thousands of Swedish words with translations, grammar explanations, pronunciation, and real-life examples, more than 8400 words fully available now offline. \n\n Start typing to get started!")
                                 .font(.body)
                                 .foregroundStyle(SearchSupportingText.body)
                                 .multilineTextAlignment(.center)
@@ -251,6 +290,8 @@ struct SearchView: View {
                     .padding(.top, 12)
                     .padding(.bottom, 32)
                     .frame(maxWidth: .infinity)
+
+                    Spacer(minLength: 0)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if results.isEmpty {
@@ -381,7 +422,7 @@ private struct WordOfTheDayCard: View {
                                 .resizable()
                                 .renderingMode(.template)
                                 .aspectRatio(contentMode: .fit)
-                                .frame(width: 17, height: 17)
+                                .frame(width: 16, height: 16)
                                 .foregroundColor(audioManager.isAudioReady ? .blue : .gray)
                         }
                     }
@@ -409,10 +450,9 @@ private struct WordOfTheDayCard: View {
             .padding(.top, 8)
 
             if firstExampleSentence != nil {
-                Divider()
-                    .opacity(colorScheme == .dark ? 0.35 : 0.55)
+                LexaThickSeparator()
                     .padding(.top, 12)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 12)
             }
 
             if let firstExampleSentence {
@@ -433,7 +473,8 @@ private struct WordOfTheDayCard: View {
                         ? Color(red: 0.15, green: 0.15, blue: 0.17)
                         : Color(.systemBackground)
                 )
-                .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 2)
+                .shadow(color: .black.opacity(0.06), radius: 14, x: 0, y: 5)
+                .shadow(color: .black.opacity(0.10), radius: 8, x: 0, y: 3)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -565,11 +606,11 @@ private struct VocabularyResultCard: View {
                                 .resizable()
                                 .renderingMode(.template)
                                 .aspectRatio(contentMode: .fit)
-                                .frame(width: 17, height: 17)
+                                .frame(width: 14, height: 14)
                                 .foregroundColor(audioManager.isAudioReady ? .blue : .gray)
                         }
                     }
-                    .frame(width: 25, height: 25)
+                    .frame(width: 26, height: 26)
                     .background(
                         RoundedRectangle(cornerRadius: 8)
                             .fill(Color(.tertiarySystemFill))
@@ -625,20 +666,28 @@ private struct VocabularyResultCard: View {
                     .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             }
 
-            Divider()
+            LexaThickSeparator()
 
             VStack(alignment: .leading, spacing: 6) {
                 Label("Grammar", systemImage: "text.book.closed")
                     .font(.subheadline.weight(.semibold))
 
                 ScrollView(.horizontal, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(entry.grammarBreakdown, id: \.self) { item in
-                            Text("• \(item)")
-                                .font(.subheadline)
-                                .foregroundStyle(SearchSupportingText.body)
-                                .lineLimit(1)
-                                .fixedSize(horizontal: true, vertical: false)
+                    Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 6) {
+                        ForEach(Array(grammarRows.enumerated()), id: \.offset) { _, row in
+                            GridRow {
+                                Text(row.left)
+                                    .font(.subheadline)
+                                    .foregroundStyle(SearchSupportingText.body)
+                                    .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: false)
+
+                                Text(row.right)
+                                    .font(.subheadline)
+                                    .foregroundStyle(SearchSupportingText.body)
+                                    .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: false)
+                            }
                         }
                     }
                 }
@@ -650,19 +699,21 @@ private struct VocabularyResultCard: View {
                 )
             }
 
-            Divider()
+            LexaThickSeparator()
 
             VStack(alignment: .leading, spacing: 8) {
                 Label("Examples", systemImage: "quote.opening")
                     .font(.subheadline.weight(.semibold))
 
-                ForEach(Array(entry.data.enumerated()), id: \.offset) { _, sentence in
-                    ExampleSentenceRow(
-                        sentence: sentence,
-                        swedishHighlightTerms: EntryExampleHighlighting.swedishHighlightTerms(for: entry),
-                        translationHighlightTerms: EntryExampleHighlighting.translationHighlightTerms(for: entry),
-                        highlightedText: EntryExampleHighlighting.highlightedText
-                    )
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(Array(entry.data.enumerated()), id: \.offset) { _, sentence in
+                        ExampleSentenceRow(
+                            sentence: sentence,
+                            swedishHighlightTerms: EntryExampleHighlighting.swedishHighlightTerms(for: entry),
+                            translationHighlightTerms: EntryExampleHighlighting.translationHighlightTerms(for: entry),
+                            highlightedText: EntryExampleHighlighting.highlightedText
+                        )
+                    }
                 }
             }
         }
@@ -675,7 +726,8 @@ private struct VocabularyResultCard: View {
                         ? Color(red: 0.15, green: 0.15, blue: 0.17)
                         : Color(.systemBackground)
                 )
-                .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
+                .shadow(color: .black.opacity(0.06), radius: 14, x: 0, y: 5)
+                .shadow(color: .black.opacity(0.10), radius: 8, x: 0, y: 3)
         )
         .onAppear {
             audioManager.generateAudio(for: entry.word)
@@ -690,6 +742,18 @@ private struct VocabularyResultCard: View {
 
     private var detailBackgroundColor: Color {
         colorScheme == .dark ? Color(.secondarySystemGroupedBackground) : Color(.systemGray6)
+    }
+
+    private var grammarRows: [(left: String, right: String)] {
+        entry.grammarBreakdown.map { item in
+            let parts = item.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+            if parts.count == 2 {
+                let left = String(parts[0]).trimmingCharacters(in: .whitespacesAndNewlines)
+                let right = String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+                return (left.isEmpty ? " " : left, right)
+            }
+            return (item.trimmingCharacters(in: .whitespacesAndNewlines), "")
+        }
     }
 }
 
@@ -808,7 +872,7 @@ private struct FavoritesView: View {
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 0) {
                     HStack(spacing: 10) {
                         HStack(spacing: 10) {
                             Image(systemName: "magnifyingglass")
@@ -830,10 +894,12 @@ private struct FavoritesView: View {
                             }
                         }
                         .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
+                        .padding(.vertical, 7)
                         .background(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .fill(Color(.secondarySystemGroupedBackground))
+                                .shadow(color: .black.opacity(0.06), radius: 14, x: 0, y: 5)
+                                .shadow(color: .black.opacity(0.10), radius: 8, x: 0, y: 3)
                         )
 
                         Menu {
@@ -848,25 +914,28 @@ private struct FavoritesView: View {
                                 .resizable()
                                 .renderingMode(.template)
                                 .aspectRatio(contentMode: .fit)
-                                .frame(width: 23, height: 23)
+                                .frame(width: 21, height: 21)
                                 .foregroundStyle(.primary)
-                                .frame(width: 40, height: 40)
+                                .frame(width: 36, height: 36)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                                         .fill(Color(.secondarySystemGroupedBackground))
+                                        .shadow(color: .black.opacity(0.06), radius: 14, x: 0, y: 5)
+                                        .shadow(color: .black.opacity(0.10), radius: 8, x: 0, y: 3)
                                 )
                         }
                     }
                     .padding(.horizontal, 20)
-                    .padding(.top, 20)
-                    .padding(.bottom, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 4)
 
                     if filteredFavoriteEntries.isEmpty {
                         ContentUnavailableView.search(text: searchText)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding(.top, 8)
                     } else {
                         List {
-                            ForEach(filteredFavoriteEntries) { entry in
+                            ForEach(Array(filteredFavoriteEntries.enumerated()), id: \.element.id) { index, entry in
                                 Button {
                                     selectedEntry = entry
                                 } label: {
@@ -880,13 +949,19 @@ private struct FavoritesView: View {
                                         Label("Delete", systemImage: "trash")
                                     }
                                 }
-                                .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                                .listRowInsets(EdgeInsets(
+                                    top: index == 0 ? 14 : 8,
+                                    leading: 20,
+                                    bottom: 8,
+                                    trailing: 20
+                                ))
                                 .listRowSeparator(.hidden)
                                 .listRowBackground(Color.clear)
                             }
                         }
                         .listStyle(.plain)
                         .scrollContentBackground(.hidden)
+                        .padding(.top, 6)
                     }
                     }
                 }
@@ -997,7 +1072,7 @@ private struct FavoriteCollapsedRow: View {
                             .resizable()
                             .renderingMode(.template)
                             .aspectRatio(contentMode: .fit)
-                            .frame(width: 18, height: 18)
+                            .frame(width: 20, height: 20)
                             .foregroundColor(audioManager.isAudioReady ? .blue : .gray)
                     }
                 }
@@ -1018,7 +1093,8 @@ private struct FavoriteCollapsedRow: View {
                         ? Color(red: 0.15, green: 0.15, blue: 0.17)
                         : Color(.systemBackground)
                 )
-                .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
+                .shadow(color: .black.opacity(0.06), radius: 14, x: 0, y: 5)
+                .shadow(color: .black.opacity(0.10), radius: 8, x: 0, y: 3)
         )
         .onAppear {
             audioManager.generateAudio(for: entry.word)
@@ -1067,10 +1143,19 @@ private struct FavoriteWordDetailView: View {
             .padding(.top, 8)
             .padding(.bottom, 8)
 
-            ScrollView {
-                VocabularyResultCard(entry: entry, showsFavoriteButton: false)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
+            GeometryReader { geometry in
+                ScrollView {
+                    VStack {
+                        Spacer(minLength: 0)
+
+                        VocabularyResultCard(entry: entry, showsFavoriteButton: false)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 16)
+
+                        Spacer(minLength: 0)
+                    }
+                    .frame(minHeight: geometry.size.height)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

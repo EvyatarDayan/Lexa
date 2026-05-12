@@ -4,83 +4,141 @@
 //
 
 import SwiftUI
+import UIKit
+import UserNotifications
 
 struct SettingsView: View {
     @AppStorage("isDarkMode") private var isDarkMode = false
+    @AppStorage("dailyNotificationEnabled") private var dailyNotificationEnabled = false
+    @AppStorage("dailyNotificationHour") private var dailyNotificationHour = 9
+    @AppStorage("dailyNotificationMinute") private var dailyNotificationMinute = 0
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
+    @ObservedObject private var favoritesManager = FavoritesManager.shared
+    @State private var showingExportFavoritesSheet = false
+    @State private var showingNotificationSettings = false
+    @State private var exportItems: [Any] = []
+    @State private var isExportingFavorites = false
+    @State private var exportFavoritesMessage: String?
 
     var body: some View {
         VStack(spacing: 0) {
             settingsTopBar
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("MODE")
-                            .font(.headline.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 20)
-
-                        HStack {
+                VStack(alignment: .leading, spacing: 20) {
+                    settingsSection(title: "Preferences") {
+                        HStack(spacing: 12) {
                             settingsRow(
                                 icon: "moon.fill",
                                 iconColor: .purple,
-                                title: "Dark Mode",
-                                subtitle: "Enable dark mode"
-                            )
-                            Spacer()
-                            Toggle("", isOn: $isDarkMode)
-                                .labelsHidden()
-                                .scaleEffect(0.8)
+                                title: "Dark mode",
+                                subtitle: "Use dark appearance"
+                            ) {
+                                Toggle("", isOn: $isDarkMode)
+                                    .labelsHidden()
+                                    .scaleEffect(0.75)
+                            }
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-                        .frame(maxWidth: .infinity)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(settingsCardBackground)
-                        )
-                        .padding(.horizontal, 20)
                     }
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("SUPPORT")
-                            .font(.headline.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 20)
+                    settingsSection(title: "Notifications") {
+                        Button {
+                            showingNotificationSettings = true
+                        } label: {
+                            settingsRow(
+                                icon: "bell.fill",
+                                iconColor: .orange,
+                                title: "Schedule notifications",
+                                subtitle: "Choose your daily reminder time"
+                            ) {
+                                HStack(spacing: 4) {
+                                    Text(dailyNotificationEnabled ? formattedNotificationTime : "Off")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
 
+                    settingsSection(title: "Export Data") {
+                        Button {
+                            exportFavorites()
+                        } label: {
+                            settingsRow(
+                                icon: "square.and.arrow.up.fill",
+                                iconColor: .green,
+                                title: "Export favorites",
+                                subtitle: "Save favorite words to a document"
+                            ) {
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(favoritesManager.favoriteIDs.isEmpty || isExportingFavorites)
+                        .opacity(favoritesManager.favoriteIDs.isEmpty ? 0.45 : 1)
+                    }
+
+                    settingsSection(title: "Support") {
                         settingsNavigationRow(
                             destination: HelpSupportView(),
-                            icon: "questionmark",
+                            icon: "questionmark.circle.fill",
                             iconColor: .blue,
-                            title: "Help & Support",
+                            title: "Help and support",
                             subtitle: "Get help and contact support"
                         )
 
+                        settingsDivider
+
                         settingsNavigationRow(
                             destination: TermsPrivacyView(),
-                            icon: "doc.text",
-                            iconColor: .blue,
-                            title: "Terms & Privacy",
+                            icon: "lock.fill",
+                            iconColor: .green,
+                            title: "Terms and privacy",
                             subtitle: "View terms and privacy policy"
                         )
 
+                        settingsDivider
+
                         settingsNavigationRow(
                             destination: AboutLexaView(),
-                            icon: "info",
-                            iconColor: .blue,
+                            icon: "info.circle.fill",
+                            iconColor: .orange,
                             title: "About",
                             subtitle: "App version and information"
                         )
                     }
                 }
-                .padding(.vertical, 16)
+                .padding(.horizontal, 16)
+                .padding(.top, 20)
+                .padding(.bottom, 40)
             }
         }
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .background(Color(.systemGroupedBackground))
+        .sheet(isPresented: $showingNotificationSettings) {
+            NotificationScheduleView()
+        }
+        .sheet(isPresented: $showingExportFavoritesSheet) {
+            ShareSheet(activityItems: exportItems)
+        }
+        .alert("Export Favorites", isPresented: Binding(
+            get: { exportFavoritesMessage != nil },
+            set: { if !$0 { exportFavoritesMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {
+                exportFavoritesMessage = nil
+            }
+        } message: {
+            Text(exportFavoritesMessage ?? "")
+        }
     }
 
     private var settingsTopBar: some View {
@@ -112,19 +170,61 @@ struct SettingsView: View {
         .padding(.bottom, 8)
     }
 
-    private func settingsRow(icon: String, iconColor: Color, title: String, subtitle: String) -> some View {
+    private func settingsSection<Content: View>(
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+
+            VStack(spacing: 0) {
+                content()
+            }
+            .background(settingsCardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+    }
+
+    private var settingsDivider: some View {
+        Divider()
+            .background(Color(.separator))
+            .padding(.leading, 60)
+    }
+
+    private func settingsRow<Trailing: View>(
+        icon: String,
+        iconColor: Color,
+        title: String,
+        subtitle: String,
+        @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
         HStack(spacing: 12) {
             settingsIcon(icon: icon, color: iconColor)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
+                    .font(.body)
                     .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 Text(subtitle)
-                    .font(.subheadline)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
-            .padding(.vertical, 2)
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+
+            trailing()
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private func settingsNavigationRow<Destination: View>(
@@ -137,21 +237,11 @@ struct SettingsView: View {
         NavigationLink {
             destination
         } label: {
-            HStack(spacing: 12) {
-                settingsRow(icon: icon, iconColor: iconColor, title: title, subtitle: subtitle)
-                Spacer()
+            settingsRow(icon: icon, iconColor: iconColor, title: title, subtitle: subtitle) {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.tertiary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(settingsCardBackground)
-            )
-            .padding(.horizontal, 20)
         }
         .buttonStyle(.plain)
     }
@@ -160,14 +250,465 @@ struct SettingsView: View {
         colorScheme == .dark ? Color(.secondarySystemGroupedBackground) : Color(.systemBackground)
     }
 
+    private var formattedNotificationTime: String {
+        var components = DateComponents()
+        components.hour = dailyNotificationHour
+        components.minute = dailyNotificationMinute
+
+        guard let date = Calendar.current.date(from: components) else {
+            return String(format: "%02d:%02d", dailyNotificationHour, dailyNotificationMinute)
+        }
+
+        return date.formatted(date: .omitted, time: .shortened)
+    }
+
     private func settingsIcon(icon: String, color: Color) -> some View {
         ZStack {
             Circle()
-                .fill(color)
-                .frame(width: 30, height: 30)
+                .fill(color.opacity(0.2))
+                .frame(width: 32, height: 32)
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(color)
+        }
+    }
+
+    private func exportFavorites() {
+        let favoriteIDs = favoritesManager.favoriteIDs
+        guard !favoriteIDs.isEmpty else {
+            exportFavoritesMessage = "You do not have any favorites to export yet."
+            return
+        }
+
+        isExportingFavorites = true
+        let favoriteOrder = favoritesManager.favoriteOrder
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let entries = try Self.loadVocabularyEntries()
+                let favoriteEntries = Self.orderedFavoriteEntries(
+                    from: entries,
+                    favoriteIDs: favoriteIDs,
+                    favoriteOrder: favoriteOrder
+                )
+
+                guard !favoriteEntries.isEmpty else {
+                    DispatchQueue.main.async {
+                        isExportingFavorites = false
+                        exportFavoritesMessage = "Could not find the favorite word details in the vocabulary file."
+                    }
+                    return
+                }
+
+                let fileName = "Lexa_Favorites_\(Self.exportDateStamp()).pdf"
+                let fileURL = try Self.createFavoritesPDF(entries: favoriteEntries, fileName: fileName)
+
+                DispatchQueue.main.async {
+                    exportItems = [fileURL]
+                    isExportingFavorites = false
+                    showingExportFavoritesSheet = true
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    isExportingFavorites = false
+                    exportFavoritesMessage = "Could not export favorites: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    private static func loadVocabularyEntries() throws -> [VocabularyEntry] {
+        guard let url = Bundle.main.url(forResource: "vocabulary", withExtension: "json") else {
+            throw ExportFavoritesError.missingVocabulary
+        }
+
+        let data = try Data(contentsOf: url)
+        let decoded = try JSONDecoder().decode([VocabularyEntry].self, from: data)
+        var seenWords = Set<String>()
+        return decoded.filter { entry in
+            seenWords.insert(entry.word).inserted
+        }
+    }
+
+    private static func orderedFavoriteEntries(
+        from entries: [VocabularyEntry],
+        favoriteIDs: Set<String>,
+        favoriteOrder: [String]
+    ) -> [VocabularyEntry] {
+        let favorites = entries.filter { favoriteIDs.contains($0.id) }
+        let byID = Dictionary(uniqueKeysWithValues: favorites.map { ($0.id, $0) })
+        let orderedRecent = favoriteOrder.reversed().compactMap { byID[$0] }
+        let orderedRecentIDs = Set(orderedRecent.map(\.id))
+        let untracked = favorites
+            .filter { !orderedRecentIDs.contains($0.id) }
+            .sorted { $0.word.localizedCompare($1.word) == .orderedAscending }
+
+        return orderedRecent + untracked
+    }
+
+    private static func exportDateStamp() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+        return formatter.string(from: Date())
+    }
+
+    private static func createFavoritesPDF(entries: [VocabularyEntry], fileName: String) throws -> URL {
+        let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792)
+        let margin: CGFloat = 48
+        let contentWidth = pageRect.width - (margin * 2)
+        let bottomLimit = pageRect.height - margin
+        let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
+
+        try renderer.writePDF(to: fileURL) { context in
+            var y = margin
+
+            func beginPage() {
+                context.beginPage()
+                y = margin
+            }
+
+            func drawText(
+                _ text: String,
+                font: UIFont,
+                color: UIColor = .label,
+                indent: CGFloat = 0,
+                spacingAfter: CGFloat = 8
+            ) {
+                let attributes: [NSAttributedString.Key: Any] = [
+                    .font: font,
+                    .foregroundColor: color
+                ]
+                let rect = NSString(string: text).boundingRect(
+                    with: CGSize(width: contentWidth - indent, height: .greatestFiniteMagnitude),
+                    options: [.usesLineFragmentOrigin, .usesFontLeading],
+                    attributes: attributes,
+                    context: nil
+                )
+
+                if y + ceil(rect.height) > bottomLimit {
+                    beginPage()
+                }
+
+                NSString(string: text).draw(
+                    in: CGRect(x: margin + indent, y: y, width: contentWidth - indent, height: ceil(rect.height)),
+                    withAttributes: attributes
+                )
+                y += ceil(rect.height) + spacingAfter
+            }
+
+            func drawDivider() {
+                if y + 18 > bottomLimit {
+                    beginPage()
+                }
+
+                y += 6
+                let path = UIBezierPath()
+                path.move(to: CGPoint(x: margin, y: y))
+                path.addLine(to: CGPoint(x: pageRect.width - margin, y: y))
+                UIColor.separator.setStroke()
+                path.lineWidth = 1
+                path.stroke()
+                y += 18
+            }
+
+            beginPage()
+            drawText("Lexa Favorites", font: .systemFont(ofSize: 28, weight: .bold), color: .systemBlue, spacingAfter: 6)
+            drawText(
+                "Exported \(Date().formatted(date: .abbreviated, time: .shortened)) • \(entries.count) word\(entries.count == 1 ? "" : "s")",
+                font: .systemFont(ofSize: 12),
+                color: .secondaryLabel,
+                spacingAfter: 24
+            )
+
+            for (index, entry) in entries.enumerated() {
+                if y > bottomLimit - 140 {
+                    beginPage()
+                }
+
+                drawText("\(index + 1). \(entry.wordForDisplay)", font: .systemFont(ofSize: 20, weight: .semibold), color: .systemBlue, spacingAfter: 6)
+                drawText("Translation: \(entry.translationForDisplay)", font: .systemFont(ofSize: 14), spacingAfter: 5)
+                drawText("Grammar: \(entry.grammarTypeForDisplay)", font: .systemFont(ofSize: 14), spacingAfter: 10)
+
+                if !entry.grammarBreakdown.isEmpty {
+                    drawText("Grammar Breakdown", font: .systemFont(ofSize: 14, weight: .semibold), spacingAfter: 5)
+                    for item in entry.grammarBreakdown {
+                        drawText("• \(item)", font: .systemFont(ofSize: 12), color: .secondaryLabel, indent: 12, spacingAfter: 4)
+                    }
+                    y += 4
+                }
+
+                if !entry.data.isEmpty {
+                    drawText("Examples", font: .systemFont(ofSize: 14, weight: .semibold), spacingAfter: 5)
+                    for sentence in entry.data {
+                        drawText("SV: \(sentence.swedish)", font: .systemFont(ofSize: 12), indent: 12, spacingAfter: 3)
+                        drawText("EN: \(sentence.english)", font: .systemFont(ofSize: 12), color: .secondaryLabel, indent: 12, spacingAfter: 8)
+                    }
+                }
+
+                if index < entries.count - 1 {
+                    drawDivider()
+                }
+            }
+        }
+
+        return fileURL
+    }
+
+    private enum ExportFavoritesError: LocalizedError {
+        case missingVocabulary
+
+        var errorDescription: String? {
+            switch self {
+            case .missingVocabulary:
+                return "Could not find vocabulary.json in the app bundle."
+            }
+        }
+    }
+}
+
+private final class FileActivityItemSource: NSObject, UIActivityItemSource {
+    private let fileURL: URL
+    private let fileName: String
+
+    init(fileURL: URL) {
+        self.fileURL = fileURL
+        self.fileName = fileURL.lastPathComponent
+        super.init()
+    }
+
+    func activityViewControllerPlaceholderItem(_ activityViewController: UIActivityViewController) -> Any {
+        fileURL
+    }
+
+    func activityViewController(
+        _ activityViewController: UIActivityViewController,
+        itemForActivityType activityType: UIActivity.ActivityType?
+    ) -> Any? {
+        fileURL
+    }
+
+    func activityViewController(
+        _ activityViewController: UIActivityViewController,
+        subjectForActivityType activityType: UIActivity.ActivityType?
+    ) -> String {
+        fileName
+    }
+
+    func activityViewController(
+        _ activityViewController: UIActivityViewController,
+        dataTypeIdentifierForActivityType activityType: UIActivity.ActivityType?
+    ) -> String {
+        "com.adobe.pdf"
+    }
+}
+
+private struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let wrappedItems = activityItems.map { item in
+            guard let url = item as? URL else { return item }
+            return FileActivityItemSource(fileURL: url) as Any
+        }
+
+        let controller = UIActivityViewController(activityItems: wrappedItems, applicationActivities: nil)
+        if let popover = controller.popoverPresentationController {
+            popover.sourceView = UIApplication.shared.connectedScenes
+                .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+                .first
+            popover.sourceRect = CGRect(
+                x: UIScreen.main.bounds.midX,
+                y: UIScreen.main.bounds.midY,
+                width: 0,
+                height: 0
+            )
+            popover.permittedArrowDirections = []
+        }
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+private struct NotificationScheduleView: View {
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("dailyNotificationEnabled") private var dailyNotificationEnabled = false
+    @AppStorage("dailyNotificationHour") private var dailyNotificationHour = 9
+    @AppStorage("dailyNotificationMinute") private var dailyNotificationMinute = 0
+    @State private var selectedTime: Date
+    @State private var notificationsEnabled: Bool
+    @State private var alertMessage: String?
+
+    init() {
+        let storedHour = UserDefaults.standard.object(forKey: "dailyNotificationHour") as? Int ?? 9
+        let storedMinute = UserDefaults.standard.object(forKey: "dailyNotificationMinute") as? Int ?? 0
+        let storedEnabled = UserDefaults.standard.bool(forKey: "dailyNotificationEnabled")
+        var components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        components.hour = storedHour
+        components.minute = storedMinute
+        _selectedTime = State(initialValue: Calendar.current.date(from: components) ?? Date())
+        _notificationsEnabled = State(initialValue: storedEnabled)
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(spacing: 0) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Daily reminder")
+                                .foregroundStyle(.primary)
+                            Text("Get a reminder to learn with Lexa")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Toggle("", isOn: $notificationsEnabled)
+                            .labelsHidden()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+
+                    if notificationsEnabled {
+                        Divider()
+                            .padding(.leading, 16)
+
+                        DatePicker("Time", selection: $selectedTime, displayedComponents: .hourAndMinute)
+                            .datePickerStyle(.wheel)
+                            .labelsHidden()
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 180)
+                    }
+                }
+                .background(Color(.secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                Text("Lexa will send one local notification every day at the selected time.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 4)
+
+                Spacer()
+            }
+            .padding(16)
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .navigationTitle("Notifications")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        saveNotificationSettings()
+                    }
+                }
+            }
+            .alert("Notifications", isPresented: Binding(
+                get: { alertMessage != nil },
+                set: { if !$0 { alertMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {
+                    alertMessage = nil
+                }
+            } message: {
+                Text(alertMessage ?? "")
+            }
+        }
+    }
+
+    private func saveNotificationSettings() {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: selectedTime)
+        let hour = components.hour ?? 9
+        let minute = components.minute ?? 0
+
+        if notificationsEnabled {
+            LexaNotificationScheduler.scheduleDailyReminder(hour: hour, minute: minute) { result in
+                DispatchQueue.main.async {
+                    switch result {
+                    case .success:
+                        dailyNotificationHour = hour
+                        dailyNotificationMinute = minute
+                        dailyNotificationEnabled = true
+                        dismiss()
+                    case .failure(let error):
+                        dailyNotificationEnabled = false
+                        alertMessage = error.localizedDescription
+                    }
+                }
+            }
+        } else {
+            LexaNotificationScheduler.cancelDailyReminder()
+            dailyNotificationEnabled = false
+            dailyNotificationHour = hour
+            dailyNotificationMinute = minute
+            dismiss()
+        }
+    }
+}
+
+private enum LexaNotificationScheduler {
+    private static let reminderIdentifier = "lexa.daily-learning-reminder"
+
+    static func scheduleDailyReminder(
+        hour: Int,
+        minute: Int,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            if let error {
+                completion(.failure(error))
+                return
+            }
+
+            guard granted else {
+                completion(.failure(NotificationScheduleError.permissionDenied))
+                return
+            }
+
+            center.removePendingNotificationRequests(withIdentifiers: [reminderIdentifier])
+
+            let content = UNMutableNotificationContent()
+            content.title = "Time for Lexa"
+            content.body = "Learn a Swedish word today."
+            content.sound = .default
+
+            var dateComponents = DateComponents()
+            dateComponents.hour = hour
+            dateComponents.minute = minute
+            let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+            let request = UNNotificationRequest(
+                identifier: reminderIdentifier,
+                content: content,
+                trigger: trigger
+            )
+
+            center.add(request) { error in
+                if let error {
+                    completion(.failure(error))
+                } else {
+                    completion(.success(()))
+                }
+            }
+        }
+    }
+
+    static func cancelDailyReminder() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [reminderIdentifier])
+    }
+
+    private enum NotificationScheduleError: LocalizedError {
+        case permissionDenied
+
+        var errorDescription: String? {
+            switch self {
+            case .permissionDenied:
+                return "Notification permission is turned off. Enable notifications for Lexa in Settings to use daily reminders."
+            }
         }
     }
 }
